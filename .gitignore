@@ -1,0 +1,4 @@
+*.onnx
+*.safetensors
+__pycache__/
+.DS_Store
