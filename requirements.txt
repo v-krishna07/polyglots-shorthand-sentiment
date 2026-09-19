@@ -1,0 +1,15 @@
+# Inference + serving
+fastapi
+uvicorn
+pydantic
+numpy
+torch
+transformers
+onnx
+onnxruntime          # use onnxruntime-gpu instead on CUDA machines
+optimum[onnxruntime]
+huggingface_hub
+
+# Demo UI
+streamlit
+requests
