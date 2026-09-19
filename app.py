@@ -67,20 +67,30 @@ def _resolve(folder, required_file, patterns):
     return Path(snapshot) / folder
 
 
-@st.cache_resource(show_spinner=False)
+import gc # Add this to your imports at the top of the file
+
+@st.cache_resource(show_spinner=False, max_entries=1)
 def load_engine(variant_name):
+    # Force Python to clear the previous model from memory before allocating new RAM
+    gc.collect() 
+    
     cfg = VARIANTS[variant_name]
     model_dir = _resolve(cfg["folder"], cfg["file"], [f"{cfg['folder']}/*"])
     tok_dir = _resolve(cfg["tokenizer_folder"], "tokenizer.json", [f"{cfg['tokenizer_folder']}/*.json"])
-    tokenizer = AutoTokenizer.from_pretrained(str(tok_dir))
+    
+    tokenizer = AutoTokenizer.from_pretrained(str(tok_dir), fix_mistral_regex=True)
 
     opts = ort.SessionOptions()
     opts.log_severity_level = 3
+    
     available = ort.get_available_providers()
-    providers = [p for p in ("CUDAExecutionProvider", "CPUExecutionProvider") if p in available]
+    providers = []
+    if "CUDAExecutionProvider" in available:
+        providers.append("CUDAExecutionProvider")
+    providers.append("CPUExecutionProvider")
+    
     session = ort.InferenceSession(str(model_dir / cfg["file"]), sess_options=opts, providers=providers)
     return tokenizer, session
-
 
 def predict(tokenizer, session, texts):
     """Return an (n, 3) array of class probabilities."""
