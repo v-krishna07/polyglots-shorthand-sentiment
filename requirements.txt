@@ -4,5 +4,5 @@ optimum>=1.20.0
 datasets>=2.18.0
 emoji>=2.10.0
 onnxruntime==1.30.0
-numpy<2.0.0
+numpy
 pandas==3.0.6
