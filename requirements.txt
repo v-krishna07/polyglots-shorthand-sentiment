@@ -1,5 +1,5 @@
 streamlit==1.64.0
-transformers>=4.40.0
+transformers==4.40.0
 optimum>=1.20.0
 datasets>=2.18.0
 emoji>=2.10.0
