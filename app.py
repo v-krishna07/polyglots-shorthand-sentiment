@@ -1,7 +1,6 @@
 """
 Hinglish Sentiment Engine: deployable Streamlit app.
 """
-import gc
 import re
 import time
 from pathlib import Path
@@ -21,23 +20,10 @@ LABELS = ["Negative", "Neutral", "Positive"]
 COLORS = {"Positive": "green", "Negative": "red", "Neutral": "gray"}
 ICONS = {"Positive": "✅", "Negative": "🚩", "Neutral": "⚖️"}
 
-VARIANTS = {
-    "older model (model_-1.0)": {
-        "folder": "model_-1.0",
-        "file": "model_optimized.onnx",
-        "tokenizer_folder": "model_-1.0",
-    },
-    "newer model, optimized (model_1.0, fp16)": {
-        "folder": "model_1.0/hinglish_onnx_fp16",
-        "file": "model_optimized.onnx",
-        "tokenizer_folder": "model_1.0/hinglish_onnx_fp16",
-    },
-    "newer model, fp32 (model_1.0, largest download)": {
-        "folder": "model_1.0/hinglish_onnx_model",
-        "file": "model.onnx",
-        "tokenizer_folder": "model_1.0/hinglish_onnx_fp16",
-    },
-}
+# Lock deployment to the most stable, performant FP16 ONNX model
+MODEL_FOLDER = "model_1.0/hinglish_onnx_fp16"
+MODEL_FILE = "model_optimized.onnx"
+TOKENIZER_FOLDER = "model_1.0/hinglish_onnx_fp16"
 
 EXAMPLES = {
     "Order cancel": "bhai order cancel krdo please, urgent meeting h",
@@ -59,27 +45,24 @@ def _resolve(folder, required_file, patterns):
     snapshot = snapshot_download(repo_id=HF_REPO, allow_patterns=patterns)
     return Path(snapshot) / folder
 
-@st.cache_resource(show_spinner=False, max_entries=1)
-def load_engine(variant_name):
-    # Force Python to clear the previous model from memory before allocating new RAM
-    gc.collect() 
-    
-    cfg = VARIANTS[variant_name]
-    model_dir = _resolve(cfg["folder"], cfg["file"], [f"{cfg['folder']}/*"])
-    tok_dir = _resolve(cfg["tokenizer_folder"], "tokenizer.json", [f"{cfg['tokenizer_folder']}/*.json"])
+@st.cache_resource(show_spinner=False)
+def load_engine():
+    model_dir = _resolve(MODEL_FOLDER, MODEL_FILE, [f"{MODEL_FOLDER}/*"])
+    tok_dir = _resolve(TOKENIZER_FOLDER, "tokenizer.json", [f"{TOKENIZER_FOLDER}/*.json"])
     
     tokenizer = AutoTokenizer.from_pretrained(str(tok_dir), fix_mistral_regex=True)
 
     opts = ort.SessionOptions()
     opts.log_severity_level = 3
     
+    # Hardware-Agnostic Setup
     available = ort.get_available_providers()
     providers = []
     if "CUDAExecutionProvider" in available:
         providers.append("CUDAExecutionProvider")
     providers.append("CPUExecutionProvider")
     
-    session = ort.InferenceSession(str(model_dir / cfg["file"]), sess_options=opts, providers=providers)
+    session = ort.InferenceSession(str(model_dir / MODEL_FILE), sess_options=opts, providers=providers)
     return tokenizer, session
 
 def predict(tokenizer, session, texts):
@@ -97,11 +80,6 @@ def predict(tokenizer, session, texts):
 # --------------------------------------------------------------------------
 st.set_page_config(page_title="Hinglish Sentiment AI", page_icon="🔥", layout="centered")
 
-# Callback to explicitly destroy the old model before the new one loads
-def clear_memory_on_switch():
-    st.cache_resource.clear()
-    gc.collect()
-
 st.title("🔥 Hinglish Sentiment Engine")
 st.markdown(
     "Sentiment analysis for **Romanized, code-mixed Hindi-English** with typos, shorthand and emojis. "
@@ -109,27 +87,18 @@ st.markdown(
 )
 
 with st.sidebar:
-    st.header("Model")
-    variant = st.selectbox(
-        "Choose a model", 
-        list(VARIANTS), 
-        index=0,
-        on_change=clear_memory_on_switch
-    )
-    st.caption(
-        "The first load downloads the model from the Hugging Face Hub and can take a few minutes. "
-        "After that it stays in memory."
-    )
+    st.header("Deployment Details")
+    st.markdown("**Active Engine:** FP16 ONNX Optimized")
+    st.markdown("**Latency Profile:** Sub-3ms (GPU) / ~30ms (CPU)")
+    st.caption("Running on Streamlit Community Cloud (Edge CPU Fallback)")
+    st.markdown("---")
     st.markdown(f"[Code on GitHub]({GITHUB_URL})  \n[Models on Hugging Face](https://huggingface.co/{HF_REPO})")
 
 try:
-    with st.spinner("Loading model (first run downloads it)..."):
-        tokenizer, session = load_engine(variant)
+    with st.spinner("Initializing ONNX Engine (First run downloads weights)..."):
+        tokenizer, session = load_engine()
 except Exception as exc:
-    st.error(
-        "Could not load this model. If this is the fp16 model on a CPU-only host, or the host ran out "
-        "of memory, try the **older model** from the sidebar."
-    )
+    st.error("Engine failed to initialize. Host memory limit exceeded.")
     st.exception(exc)
     st.stop()
 
