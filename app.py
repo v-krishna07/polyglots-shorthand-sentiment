@@ -1,13 +1,7 @@
 """
 Hinglish Sentiment Engine: deployable Streamlit app.
-
-Single process: the ONNX model runs inside Streamlit, so there is no separate
-API server. Model files come from the local folders if present, otherwise they
-are downloaded once from the Hugging Face Hub and cached.
-
-Run locally:      python3 -m streamlit run streamlit_app.py
-Deploy:           Streamlit Community Cloud or Hugging Face Spaces (Streamlit SDK)
 """
+import gc
 import re
 import time
 from pathlib import Path
@@ -41,7 +35,7 @@ VARIANTS = {
     "newer model, fp32 (model_1.0, largest download)": {
         "folder": "model_1.0/hinglish_onnx_model",
         "file": "model.onnx",
-        "tokenizer_folder": "model_1.0/hinglish_onnx_fp16",  # this folder ships no tokenizer
+        "tokenizer_folder": "model_1.0/hinglish_onnx_fp16",
     },
 }
 
@@ -52,9 +46,8 @@ EXAMPLES = {
     "Not delivered": "item delivered bol rha h but mila hi nhi",
 }
 
-# Emoji / pictograph ranges, used only for the "what if the emoji is removed" comparison
+# Emoji / pictograph ranges
 EMOJI_RE = re.compile("[\U0001F000-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0F\u200D]")
-
 
 # --------------------------------------------------------------------------
 # Model loading (cached: one copy shared by all visitors)
@@ -65,9 +58,6 @@ def _resolve(folder, required_file, patterns):
         return local
     snapshot = snapshot_download(repo_id=HF_REPO, allow_patterns=patterns)
     return Path(snapshot) / folder
-
-
-import gc # Add this to your imports at the top of the file
 
 @st.cache_resource(show_spinner=False, max_entries=1)
 def load_engine(variant_name):
@@ -102,16 +92,14 @@ def predict(tokenizer, session, texts):
     e = np.exp(logits - logits.max(axis=-1, keepdims=True))
     return e / e.sum(axis=-1, keepdims=True)
 
-
 # --------------------------------------------------------------------------
-# UI
+# UI Setup
 # --------------------------------------------------------------------------
 st.set_page_config(page_title="Hinglish Sentiment AI", page_icon="🔥", layout="centered")
 
 # Callback to explicitly destroy the old model before the new one loads
 def clear_memory_on_switch():
     st.cache_resource.clear()
-    import gc
     gc.collect()
 
 st.title("🔥 Hinglish Sentiment Engine")
@@ -126,20 +114,21 @@ with st.sidebar:
         "Choose a model", 
         list(VARIANTS), 
         index=0,
-        on_change=clear_memory_on_switch # This prevents the memory overlap crash
+        on_change=clear_memory_on_switch
     )
     st.caption(
         "The first load downloads the model from the Hugging Face Hub and can take a few minutes. "
         "After that it stays in memory."
     )
     st.markdown(f"[Code on GitHub]({GITHUB_URL})  \n[Models on Hugging Face](https://huggingface.co/{HF_REPO})")
+
 try:
     with st.spinner("Loading model (first run downloads it)..."):
         tokenizer, session = load_engine(variant)
-except Exception as exc:  # noqa: BLE001
+except Exception as exc:
     st.error(
         "Could not load this model. If this is the fp16 model on a CPU-only host, or the host ran out "
-        "of memory, try the **Fast** model from the sidebar."
+        "of memory, try the **older model** from the sidebar."
     )
     st.exception(exc)
     st.stop()
@@ -179,7 +168,6 @@ with tab_single:
             st.bar_chart(pd.DataFrame({"probability": probs}, index=LABELS))
             st.caption(f"⚡ {latency_ms:.1f} ms · {provider} · includes tokenization and inference")
 
-            # Show how much the emoji matters by re-scoring without it
             stripped = EMOJI_RE.sub("", text).strip()
             if stripped and stripped != text.strip():
                 p2 = predict(tokenizer, session, [stripped])[0]
