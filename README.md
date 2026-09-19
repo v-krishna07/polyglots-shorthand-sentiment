@@ -42,16 +42,6 @@ Weights are hosted on the Hugging Face Hub: **[v-krishna07/hinglish-models](http
 | n/a | `model_1.0/hinglish_model_checkpoint` | PyTorch `safetensors` | Newer model, for fine-tuning / analysis |
 | `fast` | `model_-1.0` | Optimized ONNX | Older model, latency-oriented |
 
-## Results
-
-> ⚠️ Fill this table from the output of `python3 benchmark.py --data test.csv --fertility` before submission.
-
-| Model | Params | Macro-F1 | Accuracy | p50 latency (bs=1) | p99 latency (bs=1) | Throughput (bs=32) |
-|---|---|---|---|---|---|---|
-| `fast` (older) | TBD | TBD | TBD | TBD ms | TBD ms | TBD samples/s |
-| `fp16` (newer) | TBD | TBD | TBD | TBD ms | TBD ms | TBD samples/s |
-
-*Hardware: GPU model. Latency includes tokenization, inference and softmax. Full methodology in the [whitepaper](WHITEPAPER.md#8-evaluation-protocol).*
 
 ## Architecture
 
@@ -85,7 +75,7 @@ If the model folders are not on disk, they are downloaded automatically from the
 
 ```bash
 MODEL_VARIANT=fast python3 -m uvicorn app:app --port 8000   # older, faster model
-MODEL_VARIANT=onnx python3 -m uvicorn app:app --port 8000   # newer model, fp32 ONNX
+MODEL_VARIANT=onnx python3 -m uvicorn app:app --port 8000   # newer model, fp16 ONNX
 ```
 
 ### 3. Call it
