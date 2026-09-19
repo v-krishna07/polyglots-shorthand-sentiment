@@ -108,6 +108,12 @@ def predict(tokenizer, session, texts):
 # --------------------------------------------------------------------------
 st.set_page_config(page_title="Hinglish Sentiment AI", page_icon="🔥", layout="centered")
 
+# Callback to explicitly destroy the old model before the new one loads
+def clear_memory_on_switch():
+    st.cache_resource.clear()
+    import gc
+    gc.collect()
+
 st.title("🔥 Hinglish Sentiment Engine")
 st.markdown(
     "Sentiment analysis for **Romanized, code-mixed Hindi-English** with typos, shorthand and emojis. "
@@ -116,13 +122,17 @@ st.markdown(
 
 with st.sidebar:
     st.header("Model")
-    variant = st.selectbox("Choose a model", list(VARIANTS), index=0)
+    variant = st.selectbox(
+        "Choose a model", 
+        list(VARIANTS), 
+        index=0,
+        on_change=clear_memory_on_switch # This prevents the memory overlap crash
+    )
     st.caption(
         "The first load downloads the model from the Hugging Face Hub and can take a few minutes. "
         "After that it stays in memory."
     )
     st.markdown(f"[Code on GitHub]({GITHUB_URL})  \n[Models on Hugging Face](https://huggingface.co/{HF_REPO})")
-
 try:
     with st.spinner("Loading model (first run downloads it)..."):
         tokenizer, session = load_engine(variant)
